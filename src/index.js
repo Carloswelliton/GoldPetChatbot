@@ -3,12 +3,14 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config();
 
+const db = require('./database/Database');
+const admin = require('./database/Database').admin;
 
 const app = express();
 app.use(bodyParser.json());
 
 const VERIFY_TOKEN = process.env.MEU_TOKEN;
-const TOKEN_META = process.env.TOKEN_DA_META; 
+const TOKEN_META = process.env.TOKEN_DA_META;
 const phoneNumberId = process.env.ID_NUMBER;
 const port = process.env.PORT || 3000;
 
@@ -25,10 +27,6 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-
-
-const userState = {}; 
-
 app.post('/webhook', async (req, res) => {
   console.log('📥 Requisição recebida:\n', JSON.stringify(req.body, null, 2));
 
@@ -44,60 +42,79 @@ app.post('/webhook', async (req, res) => {
 
       console.log('📨 Mensagem recebida:', userText);
 
-      if (!userState[from]) {
-        userState[from] = 'inicio';
-      }
+      // Obtem estado atual do usuário
+      const userRef = db.collection('usuarios').doc(from);
+      const userDoc = await userRef.get();
+      let estado = userDoc.exists ? userDoc.data().estado : 'menu';
 
       let reply = '';
 
-      switch (userState[from]) {
-        case 'inicio':
-          reply =
-            '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
-          userState[from] = 'menu';
-          break;
-
+      // Controle de fluxo
+      switch (estado) {
         case 'menu':
           if (userText.includes('1')) {
+            await userRef.set({ estado: 'banho_porte' });
             reply = '🐶 Qual o porte do seu pet? (pequeno, médio ou grande)';
-            userState[from] = 'banho_porte';
           } else if (userText.includes('2')) {
+            await userRef.set({ estado: 'consulta_nome' });
             reply = '🩺 Qual o nome do seu pet para a consulta?';
-            userState[from] = 'consulta_nome';
           } else if (userText.includes('3')) {
             reply = '👤 Encaminhando para um atendente humano...';
-            userState[from] = 'atendimento_humano';
           } else {
-            reply = '❗ Opção inválida. Digite 1, 2 ou 3.';
+            reply =
+              '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
           }
           break;
 
         case 'banho_porte':
-          reply = `✅ Banho para pet de porte *${userText}* agendado!\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
-          userState[from] = 'finalizacao';
+          reply = `✅ Banho agendado para pet de porte *${userText}*.\nDeseja algo mais?\n1️⃣ Sim\n2️⃣ Não`;
+          await userRef.set({ estado: 'finalizacao' });
           break;
 
         case 'consulta_nome':
-          reply = `✅ Consulta agendada para *${userText}*.\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
-          userState[from] = 'finalizacao';
+          reply = `✅ Consulta agendada para *${userText}*.\nDeseja algo mais?\n1️⃣ Sim\n2️⃣ Não`;
+          await userRef.set({ estado: 'finalizacao' });
           break;
 
         case 'finalizacao':
           if (userText.includes('1')) {
-            reply =
-              '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
-            userState[from] = 'menu';
+            reply = '🔁 Voltando ao menu...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+            await userRef.set({ estado: 'menu' });
           } else {
             reply = '🛑 Atendimento encerrado. Obrigado por usar o PetShop!';
-            delete userState[from];
+            await userRef.delete();
           }
           break;
 
         default:
-          reply = '⚠️ Algo deu errado. Digite "oi" para começar de novo.';
-          delete userState[from];
+          reply = '⚠️ Algo deu errado. Digite "oi" para reiniciar.';
+          await userRef.set({ estado: 'menu' });
       }
 
+      // Salva histórico da conversa
+      const conversaRef = db.collection('conversas').doc(from);
+      const novaMensagem = {
+        texto: userText,
+        resposta: reply,
+        timestamp: new Date(),
+      };
+
+      const conversaDoc = await conversaRef.get();
+
+      if (conversaDoc.exists) {
+        await conversaRef.update({
+          atualizadoEm: new Date(),
+          mensagens: admin.firestore.FieldValue.arrayUnion(novaMensagem),
+        });
+      } else {
+        await conversaRef.set({
+          numero: from,
+          atualizadoEm: new Date(),
+          mensagens: [novaMensagem],
+        });
+      }
+
+      // Envia a resposta ao WhatsApp
       const response = await axios.post(
         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
         {
