@@ -8,11 +8,10 @@ const app = express();
 app.use(bodyParser.json());
 
 const VERIFY_TOKEN = process.env.MEU_TOKEN;
-const TOKEN_META = process.env.TOKEN_DA_META; // token da API do WhatsApp
+const TOKEN_META = process.env.TOKEN_DA_META; 
 const phoneNumberId = process.env.ID_NUMBER;
 const port = process.env.PORT || 3000;
 
-// Verificação do webhook (GET)
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -26,7 +25,10 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// Recebimento de mensagens (POST)
+
+
+const userState = {}; 
+
 app.post('/webhook', async (req, res) => {
   console.log('📥 Requisição recebida:\n', JSON.stringify(req.body, null, 2));
 
@@ -42,19 +44,60 @@ app.post('/webhook', async (req, res) => {
 
       console.log('📨 Mensagem recebida:', userText);
 
-      let reply =
-        'Olá! Bem-vindo ao PetShop. Digite:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
-
-      if (userText.includes('banho')) {
-        reply = '🐶 Entendi! Você deseja agendar um banho para seu pet. Qual o porte do animal?';
-      } else if (userText.includes('consulta')) {
-        reply =
-          '🩺 Ok! Para agendar uma consulta veterinária, por favor, informe o nome do seu pet.';
-      } else if (userText.includes('atendente')) {
-        reply = '👤 Certo! Encaminhando para um atendente humano...';
+      if (!userState[from]) {
+        userState[from] = 'inicio';
       }
 
-      // Envio da resposta para o WhatsApp
+      let reply = '';
+
+      switch (userState[from]) {
+        case 'inicio':
+          reply =
+            '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+          userState[from] = 'menu';
+          break;
+
+        case 'menu':
+          if (userText.includes('1')) {
+            reply = '🐶 Qual o porte do seu pet? (pequeno, médio ou grande)';
+            userState[from] = 'banho_porte';
+          } else if (userText.includes('2')) {
+            reply = '🩺 Qual o nome do seu pet para a consulta?';
+            userState[from] = 'consulta_nome';
+          } else if (userText.includes('3')) {
+            reply = '👤 Encaminhando para um atendente humano...';
+            userState[from] = 'atendimento_humano';
+          } else {
+            reply = '❗ Opção inválida. Digite 1, 2 ou 3.';
+          }
+          break;
+
+        case 'banho_porte':
+          reply = `✅ Banho para pet de porte *${userText}* agendado!\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
+          userState[from] = 'finalizacao';
+          break;
+
+        case 'consulta_nome':
+          reply = `✅ Consulta agendada para *${userText}*.\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
+          userState[from] = 'finalizacao';
+          break;
+
+        case 'finalizacao':
+          if (userText.includes('1')) {
+            reply =
+              '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+            userState[from] = 'menu';
+          } else {
+            reply = '🛑 Atendimento encerrado. Obrigado por usar o PetShop!';
+            delete userState[from];
+          }
+          break;
+
+        default:
+          reply = '⚠️ Algo deu errado. Digite "oi" para começar de novo.';
+          delete userState[from];
+      }
+
       const response = await axios.post(
         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
         {
