@@ -6,11 +6,10 @@
   const app = express();
   app.use(bodyParser.json());
 
-  const VERIFY_TOKEN = 'meu_token_secreto_petshop';
-  const TOKEN_META =
-    'EACLDBfzMWBkBPL0idkkZCkBHCCwRZCwvZADJU5PvmelaDdydtnOwostUSgwZCk54v4GcdlMF3nZBvhNQ533eLTJXYG3HZC5sAdCPIf1kpVatn0XKwfZCVJW3WJmkUhFiaWsGEsvhyE1iwQFArKZAsfYMTJO8LFCd3JOyw0mc13oIT8g7BnUh8NVqCcQZB6xq5nC3cxx9NZCFfRoSeWVPyJ0hSzTFsXZCBLNneNmjS1LtpyQPgZDZD'; // token da API do WhatsApp
-  const phoneNumberId = '694324243763743';
-  const PORT = 3000;
+  const VERIFY_TOKEN = process.env.MEU_TOKEN;
+  const TOKEN_META = process.env.TOKEN_DA_META; // token da API do WhatsApp
+  const phoneNumberId = process.env.ID_NUMBER;
+  const PORT = process.env.PORT;
 
 // Verificação do webhook (GET)
 app.get('/webhook', (req, res) => {
