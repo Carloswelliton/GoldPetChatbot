@@ -52,6 +52,17 @@ app.post('/webhook', async (req, res) => {
         reply = '👤 Certo! Encaminhando para um atendente humano...';
       }
 
+
+
+
+
+
+
+
+
+
+
+      
       // Envio da resposta para o WhatsApp
       const response = await axios.post(
         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,

@@ -1,18 +1,46 @@
 {
-  "name": "teste",
+  "name": "chatbot-goldpet",
   "version": "1.0.0",
-  "description": "",
+  "description": "chatbot de atendimento automatizado para petShop",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
+  "scripts": {
+    "start": "node ./src/index.js",
+    "dev": "node --watch ./src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [
+    "whatsapp",
+    "chatbot",
+    "automation",
+    "customer-service"
+  ],
+  "author": "Carlos Welliton",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.10.0",
     "body-parser": "^2.2.0",
     "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Carloswelliton/chatbot"
+  },
+  "bugs": {
+    "url": "https://github.com/Carloswelliton/chatbot/issues"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
   }
 }
+
+
+
+
+
