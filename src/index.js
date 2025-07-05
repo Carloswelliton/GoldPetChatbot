@@ -2,18 +2,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config();
-
 const db = require('./database/Database');
 const admin = require('./database/Database').admin;
-
 const app = express();
-app.use(bodyParser.json());
 
 const VERIFY_TOKEN = process.env.MEU_TOKEN;
 const TOKEN_META = process.env.TOKEN_DA_META;
 const phoneNumberId = process.env.ID_NUMBER;
 const port = process.env.PORT || 3000;
 
+app.use(bodyParser.json());
+
+//endpoint para validar a API na META 
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -27,9 +27,9 @@ app.get('/webhook', (req, res) => {
   }
 });
 
+//Inicio da interação com o usuário
 app.post('/webhook', async (req, res) => {
   console.log('📥 Requisição recebida:\n', JSON.stringify(req.body, null, 2));
-
   try {
     const change = req.body?.entry?.[0]?.changes?.[0];
 
@@ -37,14 +37,16 @@ app.post('/webhook', async (req, res) => {
       const message = change.value?.messages?.[0];
       const from = message?.from;
       const userText = message?.text?.body?.toLowerCase();
-
       if (!message || !from || !userText) return res.sendStatus(200);
-
       console.log('📨 Mensagem recebida:', userText);
 
-      // Obtem estado atual do usuário
+      // indica em qual estado o ususario está
       const userRef = db.collection('usuarios').doc(from);
+
+      //armazena o que o usuario digitou
       const userDoc = await userRef.get();
+
+      //inicia o estado para dar u
       let estado = userDoc.exists ? userDoc.data().estado : 'menu';
 
       let reply = '';
@@ -52,15 +54,19 @@ app.post('/webhook', async (req, res) => {
       // Controle de fluxo
       switch (estado) {
         case 'menu':
-          if (userText.includes('1')) {
+          if (["1", "um", "banho"].some(input => userText.includes(input))) {
             await userRef.set({ estado: 'banho_porte' });
             reply = '🐶 Qual o porte do seu pet? (pequeno, médio ou grande)';
-          } else if (userText.includes('2')) {
+          } 
+          else if (userText.includes('2')) {
             await userRef.set({ estado: 'consulta_nome' });
             reply = '🩺 Qual o nome do seu pet para a consulta?';
-          } else if (userText.includes('3')) {
+          } 
+          else if (userText.includes('3')) {
             reply = '👤 Encaminhando para um atendente humano...';
-          } else {
+            break;
+          } 
+          else {
             reply =
               '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
           }
@@ -83,6 +89,7 @@ app.post('/webhook', async (req, res) => {
           } else {
             reply = '🛑 Atendimento encerrado. Obrigado por usar o PetShop!';
             await userRef.delete();
+            break;
           }
           break;
 
@@ -95,12 +102,13 @@ app.post('/webhook', async (req, res) => {
       const conversaRef = db.collection('conversas').doc(from);
       const novaMensagem = {
         texto: userText,
-        resposta: reply,
+        tipo: 'usuario',
         timestamp: new Date(),
       };
 
       const conversaDoc = await conversaRef.get();
 
+      //atualiza a conversa se o número de telefone ja existir no bd
       if (conversaDoc.exists) {
         await conversaRef.update({
           atualizadoEm: new Date(),
@@ -130,6 +138,14 @@ app.post('/webhook', async (req, res) => {
           },
         }
       );
+
+      await db.collection('conversas').doc(from).collection('mensagens').add({
+        resposta: reply,
+        tipo: 'bot',
+        timestamp: new Date()
+      });
+
+      
 
       console.log('✅ Mensagem enviada:', response.data);
     }
