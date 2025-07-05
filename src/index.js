@@ -1,6 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+require('dotenv').config();
+
 
 const app = express();
 app.use(bodyParser.json());
@@ -8,7 +10,7 @@ app.use(bodyParser.json());
 const VERIFY_TOKEN = process.env.MEU_TOKEN;
 const TOKEN_META = process.env.TOKEN_DA_META; // token da API do WhatsApp
 const phoneNumberId = process.env.ID_NUMBER;
-const PORT = process.env.PORT;
+const port = process.env.PORT || 3000;
 
 // Verificação do webhook (GET)
 app.get('/webhook', (req, res) => {
@@ -79,6 +81,6 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Bot rodando na porta ${PORT}`);
+app.listen(port, () => {
+  console.log(`🚀 Bot rodando na porta ${port}`);
 });
