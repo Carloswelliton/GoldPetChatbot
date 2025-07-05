@@ -1,15 +1,14 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const axios = require('axios');
 
-  const express = require('express');
-  const bodyParser = require('body-parser');
-  const axios = require('axios');
+const app = express();
+app.use(bodyParser.json());
 
-  const app = express();
-  app.use(bodyParser.json());
-
-  const VERIFY_TOKEN = process.env.MEU_TOKEN;
-  const TOKEN_META = process.env.TOKEN_DA_META; // token da API do WhatsApp
-  const phoneNumberId = process.env.ID_NUMBER;
-  const PORT = process.env.PORT;
+const VERIFY_TOKEN = process.env.MEU_TOKEN;
+const TOKEN_META = process.env.TOKEN_DA_META; // token da API do WhatsApp
+const phoneNumberId = process.env.ID_NUMBER;
+const PORT = process.env.PORT;
 
 // Verificação do webhook (GET)
 app.get('/webhook', (req, res) => {
@@ -41,27 +40,18 @@ app.post('/webhook', async (req, res) => {
 
       console.log('📨 Mensagem recebida:', userText);
 
-      let reply = 'Olá! Bem-vindo ao PetShop. Digite:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+      let reply =
+        'Olá! Bem-vindo ao PetShop. Digite:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
 
       if (userText.includes('banho')) {
         reply = '🐶 Entendi! Você deseja agendar um banho para seu pet. Qual o porte do animal?';
       } else if (userText.includes('consulta')) {
-        reply = '🩺 Ok! Para agendar uma consulta veterinária, por favor, informe o nome do seu pet.';
+        reply =
+          '🩺 Ok! Para agendar uma consulta veterinária, por favor, informe o nome do seu pet.';
       } else if (userText.includes('atendente')) {
         reply = '👤 Certo! Encaminhando para um atendente humano...';
       }
 
-
-
-
-
-
-
-
-
-
-
-      
       // Envio da resposta para o WhatsApp
       const response = await axios.post(
         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
@@ -69,13 +59,13 @@ app.post('/webhook', async (req, res) => {
           messaging_product: 'whatsapp',
           to: from,
           type: 'text',
-          text: { body: reply }
+          text: { body: reply },
         },
         {
           headers: {
             Authorization: `Bearer ${TOKEN_META}`,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+          },
         }
       );
 
