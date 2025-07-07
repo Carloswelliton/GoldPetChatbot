@@ -29,6 +29,8 @@ app.get('/webhook', (req, res) => {
 
 const userState = {}; 
 const userTimers = {};
+const userData = {}; // Para armazenar dados temporários (porte do pet, nome do pet, tipo de serviço)
+
 const TIMEOUT_MS = 2 * 60 * 1000; // Tempo limite de inatividade: 2 minutos
 
 function startInactivityTimer(userId, sendMessageCallback) {
@@ -38,6 +40,7 @@ function startInactivityTimer(userId, sendMessageCallback) {
     sendMessageCallback('⏱️ Atendimento encerrado por inatividade. Se precisar, envie "oi" para começar novamente.');
     delete userState[userId];
     delete userTimers[userId];
+    delete userData[userId];
   }, TIMEOUT_MS);
 }
 
@@ -59,6 +62,26 @@ app.post('/webhook', async (req, res) => {
       if (!userState[from]) {
         userState[from] = 'inicio';
       }
+      if (!userData[from]) {
+        userData[from] = {};
+      }
+
+      // **TRATAR COMANDOS GLOBAIS "voltar" e "cancelar"**
+      if (userText === 'voltar') {
+        userState[from] = 'menu';
+        delete userData[from]; // limpa dados temporários
+        await sendMessage(from, '🔙 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente');
+        startInactivityTimer(from, sendMessage.bind(null, from));
+        return res.sendStatus(200);
+      }
+      if (userText === 'cancelar') {
+        await sendMessage(from, '❌ Atendimento cancelado. Se precisar, envie "oi" para começar novamente.');
+        delete userState[from];
+        delete userData[from];
+        clearTimeout(userTimers[from]);
+        delete userTimers[from];
+        return res.sendStatus(200);
+      }
 
       let reply = '';
 
@@ -72,12 +95,15 @@ app.post('/webhook', async (req, res) => {
           if (userText.includes('1')) {
             reply = '🐶 Qual o porte do seu pet? (pequeno, médio ou grande)';
             userState[from] = 'banho_porte';
+            userData[from].tipoServico = 'Banho';
           } else if (userText.includes('2')) {
             reply = '🩺 Qual o nome do seu pet para a consulta?';
             userState[from] = 'consulta_nome';
+            userData[from].tipoServico = 'Consulta';
           } else if (userText.includes('3')) {
             reply = '👤 Encaminhando para um atendente humano...';
             userState[from] = 'atendimento_humano';
+            delete userData[from];
           } else {
             reply = '❗ Opção inválida. Digite 1, 2 ou 3.';
           }
@@ -85,28 +111,49 @@ app.post('/webhook', async (req, res) => {
 
         case 'banho_porte':
           if (['pequeno', 'médio', 'medio', 'grande'].some(p => userText.includes(p))) {
-            reply = `✅ Banho para pet de porte *${userText}* agendado! Deseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
-            userState[from] = 'finalizacao';
+            userData[from].portePet = userText.match(/pequeno|médio|medio|grande/)[0]; // salva o porte
+            userState[from] = 'confirmacao';
+            reply = `🐾 Você escolheu Banho para pet de porte *${userData[from].portePet}*.\nConfirma o agendamento? (sim/não)`;
           } else {
             reply = '❗ Por favor, digite o porte do seu pet: pequeno, médio ou grande.';
           }
           break;
 
         case 'consulta_nome':
-          reply = `✅ Consulta agendada para *${userText}*.\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
-          userState[from] = 'finalizacao';
+          userData[from].nomePet = userText;
+          userState[from] = 'confirmacao';
+          reply = `🐾 Você escolheu Consulta para o pet *${userData[from].nomePet}*.\nConfirma o agendamento? (sim/não)`;
+          break;
+
+        case 'confirmacao':
+          const respostasSim = ['sim', 's', '1'];
+          const respostasNao = ['não', 'nao', 'n', '2'];
+
+          if (respostasSim.includes(userText)) {
+            // Confirmação positiva — finaliza agendamento
+            reply = `✅ ${userData[from].tipoServico} agendado com sucesso!`;
+            reply += '\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não';
+            userState[from] = 'finalizacao';
+          } else if (respostasNao.includes(userText)) {
+            // Confirmação negativa — volta ao menu para refazer
+            reply = '❌ Agendamento cancelado. Voltando ao menu principal.\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+            userState[from] = 'menu';
+            delete userData[from];
+          } else {
+            reply = '❗ Por favor, responda com "sim" ou "não".';
+          }
           break;
 
         case 'finalizacao':
-          const respostasSim = ['1', 'sim', 's'];
-
-          if (respostasSim.includes(userText)) {
-            reply =
-              '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+          const respostasSimFinal = ['1', 'sim', 's'];
+          if (respostasSimFinal.includes(userText)) {
+            reply = '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
             userState[from] = 'menu';
+            delete userData[from];
           } else {
             reply = '🛑 Atendimento encerrado. Obrigado por usar o PetShop!';
             delete userState[from];
+            delete userData[from];
             clearTimeout(userTimers[from]);
             delete userTimers[from];
           }
@@ -115,6 +162,7 @@ app.post('/webhook', async (req, res) => {
         default:
           reply = '⚠️ Não entendi sua mensagem. Por favor, digite "oi" para começar de novo.';
           delete userState[from];
+          delete userData[from];
           clearTimeout(userTimers[from]);
           delete userTimers[from];
       }
@@ -171,6 +219,29 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+async function sendMessage(to, message) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: message },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN_META}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    console.log('✅ Mensagem enviada:', response.data);
+  } catch (err) {
+    console.error('❌ Erro ao enviar mensagem:', err.response?.data || err.message);
+  }
+}
 
 app.listen(port, () => {
   console.log(`🚀 Bot rodando na porta ${port}`);
