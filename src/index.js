@@ -87,7 +87,9 @@ app.post('/webhook', async (req, res) => {
           break;
 
         case 'finalizacao':
-          if (userText.includes('1')) {
+          const respostasSim = ['1', 'sim', 's'];
+
+          if (respostasSim.includes(userText)) {
             reply =
               '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
             userState[from] = 'menu';
