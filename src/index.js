@@ -3,12 +3,11 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config();
 
-
 const app = express();
 app.use(bodyParser.json());
 
 const VERIFY_TOKEN = process.env.MEU_TOKEN;
-const TOKEN_META = process.env.TOKEN_DA_META; 
+const TOKEN_META = process.env.TOKEN_DA_META;
 const phoneNumberId = process.env.ID_NUMBER;
 const port = process.env.PORT || 3000;
 
@@ -25,9 +24,7 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-
-
-const userState = {}; 
+const userState = {};
 const userTimers = {};
 const userData = {}; // Para armazenar dados temporários (porte do pet, nome do pet, tipo de serviço)
 
@@ -37,7 +34,9 @@ function startInactivityTimer(userId, sendMessageCallback) {
   clearTimeout(userTimers[userId]);
 
   userTimers[userId] = setTimeout(() => {
-    sendMessageCallback('⏱️ Atendimento encerrado por inatividade. Se precisar, envie "oi" para começar novamente.');
+    sendMessageCallback(
+      '⏱️ Atendimento encerrado por inatividade. Se precisar, envie "oi" para começar novamente.'
+    );
     delete userState[userId];
     delete userTimers[userId];
     delete userData[userId];
@@ -70,12 +69,18 @@ app.post('/webhook', async (req, res) => {
       if (userText === 'voltar') {
         userState[from] = 'menu';
         delete userData[from]; // limpa dados temporários
-        await sendMessage(from, '🔙 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente');
+        await sendMessage(
+          from,
+          '🔙 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente'
+        );
         startInactivityTimer(from, sendMessage.bind(null, from));
         return res.sendStatus(200);
       }
       if (userText === 'cancelar') {
-        await sendMessage(from, '❌ Atendimento cancelado. Se precisar, envie "oi" para começar novamente.');
+        await sendMessage(
+          from,
+          '❌ Atendimento cancelado. Se precisar, envie "oi" para começar novamente.'
+        );
         delete userState[from];
         delete userData[from];
         clearTimeout(userTimers[from]);
@@ -87,7 +92,8 @@ app.post('/webhook', async (req, res) => {
 
       switch (userState[from]) {
         case 'inicio':
-          reply = '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+          reply =
+            '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
           userState[from] = 'menu';
           break;
 
@@ -110,7 +116,7 @@ app.post('/webhook', async (req, res) => {
           break;
 
         case 'banho_porte':
-          if (['pequeno', 'médio', 'medio', 'grande'].some(p => userText.includes(p))) {
+          if (['pequeno', 'médio', 'medio', 'grande'].some((p) => userText.includes(p))) {
             userData[from].portePet = userText.match(/pequeno|médio|medio|grande/)[0]; // salva o porte
             userState[from] = 'confirmacao';
             reply = `🐾 Você escolheu Banho para pet de porte *${userData[from].portePet}*.\nConfirma o agendamento? (sim/não)`;
@@ -136,7 +142,8 @@ app.post('/webhook', async (req, res) => {
             userState[from] = 'finalizacao';
           } else if (respostasNao.includes(userText)) {
             // Confirmação negativa — volta ao menu para refazer
-            reply = '❌ Agendamento cancelado. Voltando ao menu principal.\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+            reply =
+              '❌ Agendamento cancelado. Voltando ao menu principal.\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
             userState[from] = 'menu';
             delete userData[from];
           } else {
@@ -147,7 +154,8 @@ app.post('/webhook', async (req, res) => {
         case 'finalizacao':
           const respostasSimFinal = ['1', 'sim', 's'];
           if (respostasSimFinal.includes(userText)) {
-            reply = '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+            reply =
+              '🔁 Voltando ao menu principal...\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
             userState[from] = 'menu';
             delete userData[from];
           } else {
@@ -207,7 +215,10 @@ app.post('/webhook', async (req, res) => {
             );
             console.log(`⏱️ Timer expirado: conversa encerrada com ${from}`);
           } catch (err) {
-            console.error('❌ Erro ao enviar mensagem por inatividade:', err.response?.data || err.message);
+            console.error(
+              '❌ Erro ao enviar mensagem por inatividade:',
+              err.response?.data || err.message
+            );
           }
         });
       }
