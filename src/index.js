@@ -73,8 +73,12 @@ app.post('/webhook', async (req, res) => {
           break;
 
         case 'banho_porte':
-          reply = `✅ Banho para pet de porte *${userText}* agendado!\nDeseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
-          userState[from] = 'finalizacao';
+          if (['pequeno', 'médio', 'medio', 'grande'].some(p => userText.includes(p))) {
+            reply = `✅ Banho para pet de porte *${userText}* agendado! Deseja mais alguma coisa?\n1️⃣ Sim\n2️⃣ Não`;
+            userState[from] = 'finalizacao';
+          } else {
+            reply = '❗ Por favor, digite o porte do seu pet: pequeno, médio ou grande.';
+          }
           break;
 
         case 'consulta_nome':
@@ -94,7 +98,7 @@ app.post('/webhook', async (req, res) => {
           break;
 
         default:
-          reply = '⚠️ Algo deu errado. Digite "oi" para começar de novo.';
+          reply = '⚠️ Não entendi sua mensagem. Por favor, digite "oi" para começar de novo.';
           delete userState[from];
       }
 
