@@ -28,6 +28,18 @@ app.get('/webhook', (req, res) => {
 
 
 const userState = {}; 
+const userTimers = {};
+const TIMEOUT_MS = 2 * 60 * 1000; // Tempo limite de inatividade: 2 minutos
+
+function startInactivityTimer(userId, sendMessageCallback) {
+  clearTimeout(userTimers[userId]);
+
+  userTimers[userId] = setTimeout(() => {
+    sendMessageCallback('⏱️ Atendimento encerrado por inatividade. Se precisar, envie "oi" para começar novamente.');
+    delete userState[userId];
+    delete userTimers[userId];
+  }, TIMEOUT_MS);
+}
 
 app.post('/webhook', async (req, res) => {
   console.log('📥 Requisição recebida:\n', JSON.stringify(req.body, null, 2));
@@ -52,8 +64,7 @@ app.post('/webhook', async (req, res) => {
 
       switch (userState[from]) {
         case 'inicio':
-          reply =
-            '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
+          reply = '🐾 Olá! Bem-vindo ao PetShop. Escolha uma opção:\n1️⃣ Banho\n2️⃣ Consulta\n3️⃣ Falar com atendente';
           userState[from] = 'menu';
           break;
 
@@ -96,14 +107,19 @@ app.post('/webhook', async (req, res) => {
           } else {
             reply = '🛑 Atendimento encerrado. Obrigado por usar o PetShop!';
             delete userState[from];
+            clearTimeout(userTimers[from]);
+            delete userTimers[from];
           }
           break;
 
         default:
           reply = '⚠️ Não entendi sua mensagem. Por favor, digite "oi" para começar de novo.';
           delete userState[from];
+          clearTimeout(userTimers[from]);
+          delete userTimers[from];
       }
 
+      // Envia a resposta ao usuário
       const response = await axios.post(
         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
         {
@@ -121,6 +137,32 @@ app.post('/webhook', async (req, res) => {
       );
 
       console.log('✅ Mensagem enviada:', response.data);
+
+      // Inicia o timer após enviar a mensagem, se o usuário ainda estiver ativo
+      if (userState[from]) {
+        startInactivityTimer(from, async (msg) => {
+          try {
+            await axios.post(
+              `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+              {
+                messaging_product: 'whatsapp',
+                to: from,
+                type: 'text',
+                text: { body: msg },
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${TOKEN_META}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+            console.log(`⏱️ Timer expirado: conversa encerrada com ${from}`);
+          } catch (err) {
+            console.error('❌ Erro ao enviar mensagem por inatividade:', err.response?.data || err.message);
+          }
+        });
+      }
     }
 
     res.sendStatus(200);
