@@ -3,7 +3,6 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config();
 const { db, admin } = require('./database/Database');
-const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 app.use(bodyParser.json());
@@ -17,8 +16,6 @@ const userState = {};
 const userTimers = {};
 const userData = {};
 const TIMEOUT_MS = 2 * 60 * 1000;
-
-console.log('📦 Firebase DB:', typeof db);
 
 // Inicia ou reinicia o timer de inatividade
 function startInactivityTimer(userId, sendMessageCallback) {
@@ -112,7 +109,8 @@ app.post('/webhook', async (req, res) => {
     if (change?.field === 'messages') {
       const message = change.value?.messages?.[0];
       const from = message?.from;
-      const userText = message?.text?.body?.toLowerCase();
+      const textRaw = message?.text?.body || '';
+      const userText = textRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
       if (!message || !from || !userText) return res.sendStatus(200);
 
@@ -233,7 +231,6 @@ app.post('/webhook', async (req, res) => {
         startInactivityTimer(from, sendMessage.bind(null, from));
       }
     }
-
     res.sendStatus(200);
   } catch (err) {
     console.error('❌ Erro ao processar mensagem:', err.response?.data || err.message);
