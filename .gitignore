@@ -1,3 +1,4 @@
 node_modules/
 .env
 chatbot-gold.json
+/src/teste.js
