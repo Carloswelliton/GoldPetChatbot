@@ -104,7 +104,7 @@ atendente->>user: Entra em contato para tirar dúvidas
 
 ## 📄 Licença
 
-© 2025 Nome da Sua Empresa ou Seu Nome
+© 2025 Carlos Welliton
 
 Este software é proprietário. Nenhuma parte deste código pode ser copiada, modificada, distribuída ou usada comercialmente sem permissão expressa do autor.
 
