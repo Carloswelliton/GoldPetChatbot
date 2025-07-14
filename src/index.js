@@ -8,7 +8,7 @@ const {
   handleButton,
   getUserState,
   setUserState,
-  clearUser,
+  limparDados,
 } = require('./handlers/statesHandler');
 const { sendMessage } = require('./utils/sendMessage');
 
@@ -36,14 +36,13 @@ app.get('/webhook', async (req, res) => {
 });
 
 // Timer de inatividade
-function startInactivityTimer(userId) {
+async function startInactivityTimer(userId, sendMessageCallback) {
   clearTimeout(userTimers[userId]);
   userTimers[userId] = setTimeout(() => {
-    sendMessage(
-      userId,
+    sendMessageCallback(
       '⏱️ Atendimento encerrado por inatividade. Envie "oi" para começar novamente.'
     );
-    clearUser(userId);
+    limparDados(userId);
   }, TIMEOUT_MS);
 }
 
@@ -63,7 +62,7 @@ app.post('/webhook', async (req, res) => {
 
     if (['cancelar', 'encerrar'].includes(clientText)) {
       await sendMessage(from, '❌ Atendimento cancelado.');
-      clearUser(from);
+      limparDados(from);
       return res.sendStatus(200);
     }
 
@@ -80,7 +79,7 @@ app.post('/webhook', async (req, res) => {
       await handleText(from, clientText);
     }
 
-    startInactivityTimer(from);
+    startInactivityTimer(from, sendMessage.bind(null, from));
     return res.sendStatus(200);
   } catch (err) {
     console.error('❌ Erro ao processar mensagem:', err.response?.data || err.message);

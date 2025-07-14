@@ -2,6 +2,8 @@ const botao = require('../controller/Buttons');
 const { registrarAgendamento } = require('../utils/firestore');
 const { validarCpf } = require('../utils/cpfCheck');
 const { sendMessage } = require('../utils/sendMessage');
+const axios = require('axios');
+const { text } = require('body-parser');
 
 const userState = {};
 const userData = {};
@@ -20,7 +22,7 @@ function getUserData(userId) {
   return userData[userId];
 }
 
-function clearUser(userId) {
+function limparDados(userId) {
   delete userState[userId];
   delete userData[userId];
 }
@@ -40,14 +42,33 @@ async function handleText(userId, text) {
         await sendMessage(userId, '❌ CPF inválido. Tente novamente.');
         return;
       }
-      data.cpf = text;
+      data.cpf = text.replace(/[^0-9]/g, '');
+      try {
+        const response = await axios.get(
+          `http://localhost:3000/api/agendamentos/existe/${data.cpf}`
+        );
+        if (response.data.existe) {
+          const cadastro = response.data.dados;
+          Object.assign(data, cadastro);
+          await sendMessage(userId, '📋 Cadastro localizado!');
+          await sendMessage(userId, 'Qual o nome do pet?');
+          setUserState(userId, 'nome_pet');
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Erro ao verificar agendamento:', error.message);
+        await sendMessage(
+          userId,
+          '⚠️ CPF não encontrado na base de dados, vamos prosseguir com o seu cadastro.'
+        );
+      }
       await sendMessage(userId, 'Informe o seu nome completo');
       setUserState(userId, 'nome');
       break;
 
     case 'nome':
       data.nome = text;
-      await sendMessage(userId, 'Qual o seu CEP?');
+      await sendMessage(userId, 'Qual o seu CEP? (ex: 79331-050)');
       setUserState(userId, 'cep');
       break;
 
@@ -77,7 +98,7 @@ async function handleText(userId, text) {
 
     case 'nome_pet':
       data.nome_pet = text;
-      await sendMessage(userId, 'Qual a data de nascimento do pet?');
+      await sendMessage(userId, 'Qual a data de nascimento do pet? (ex: 01/01/2025)');
       setUserState(userId, 'nascimento_pet');
       break;
 
@@ -98,6 +119,36 @@ async function handleText(userId, text) {
       await botao.finalizaBotao(userId, data.tipoServico);
       setUserState(userId, 'aguardando_confirmacao');
       break;
+
+    case 'aguardando_cpf_cancelamento':
+      console.log('entrou no aguardando_cpf_cancelamento');
+      const cpfLimpo = String(text).replace(/[^0-9]/g, '');
+      if (!validarCpf(text)) {
+        await sendMessage(userId, '❌ CPF inválido. Tente novamente.');
+        return;
+      }
+
+      data.cpf = cpfLimpo;
+      try {
+        console.log('entrou no try');
+        const response = await axios.get(`http://localhost:3000/api/agendamentos/${data.cpf}`);
+
+        if (response.data.agendamentos.length === 0) {
+          await sendMessage(userId, '⚠️ Nenhum agendamento encontrado para este número.');
+          break;
+        }
+
+        const agendamentoMaisRecente = response.data.agendamentos[0];
+        const id = agendamentoMaisRecente.id;
+
+        await axios.delete(`http://localhost:3000/api/agendamentos/${data.cpf}/${id}`);
+        await sendMessage(userId, '✅ Seu agendamento mais recente foi cancelado com sucesso!');
+        limparDados(userId);
+      } catch (error) {
+        console.error('❌ Erro ao cancelar agendamento:', error.message);
+        await sendMessage(userId, '❌ Não foi possível cancelar o agendamento. Tente novamente.');
+      }
+      break;
   }
 }
 
@@ -116,7 +167,7 @@ async function handleButton(userId, buttonId) {
     case 'banho_btn':
     case 'consulta_btn':
       data.tipoServico = buttonId.replace('_btn', '');
-      await sendMessage(userId, 'Informe o seu CPF');
+      await sendMessage(userId, 'Informe o seu CPF (somente os numeros)');
       setUserState(userId, 'cpf');
       break;
 
@@ -128,8 +179,15 @@ async function handleButton(userId, buttonId) {
     case 'mais_nao':
       await registrarAgendamento(data.cpf, data);
       await sendMessage(userId, '✅ Agendado com sucesso. Obrigado por usar o PetShop!');
-      clearUser(userId);
+      limparDados(userId);
       break;
+
+    case 'cancelar_agendamento':
+      await sendMessage(userId, 'Informe o seu CPF (somente os números)');
+      setUserState(userId, 'aguardando_cpf_cancelamento'); 
+      break;
+
+    
   }
 }
 
@@ -139,5 +197,5 @@ module.exports = {
   getUserState,
   setUserState,
   getUserData,
-  clearUser,
+  limparDados,
 };
