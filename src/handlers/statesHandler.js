@@ -4,6 +4,7 @@ const { validarCpf } = require('../utils/cpfCheck');
 const { sendMessage } = require('../utils/sendMessage');
 const axios = require('axios');
 const { text } = require('body-parser');
+const admin = require('firebase-admin');
 
 const userState = {};
 const userData = {};
@@ -116,37 +117,74 @@ async function handleText(userId, text) {
 
     case 'pelagem':
       data.pelagem = text;
+      await sendMessage(userId, 'Qual a data desejada para o agendamento? (ex: 14/07/2025)');
+      setUserState(userId, 'data_agendamento');
+      break;
+
+    case 'data_agendamento':
+      data.data = text; 
       await botao.finalizaBotao(userId, data.tipoServico);
       setUserState(userId, 'aguardando_confirmacao');
       break;
 
     case 'aguardando_cpf_cancelamento':
-      console.log('entrou no aguardando_cpf_cancelamento');
-      const cpfLimpo = String(text).replace(/[^0-9]/g, '');
-      if (!validarCpf(text)) {
+      const cpfLimpo = text.replace(/\D/g, '');
+      if (!validarCpf(cpfLimpo)) {
         await sendMessage(userId, '❌ CPF inválido. Tente novamente.');
         return;
       }
 
-      data.cpf = cpfLimpo;
       try {
-        console.log('entrou no try');
-        const response = await axios.get(`http://localhost:3000/api/agendamentos/${data.cpf}`);
+        const response = await axios.get(
+          `http://localhost:3000/api/agendamentos/futuros/${cpfLimpo}`
+        );
+        const agendamentos = response.data.agendamentos;
 
-        if (response.data.agendamentos.length === 0) {
-          await sendMessage(userId, '⚠️ Nenhum agendamento encontrado para este número.');
-          break;
+        if (!agendamentos.length) {
+          await sendMessage(userId, '⚠️ Nenhum agendamento futuro encontrado.');
+          return;
         }
 
-        const agendamentoMaisRecente = response.data.agendamentos[0];
-        const id = agendamentoMaisRecente.id;
+        // salvar CPF e lista para o próximo passo
+        userData[userId].cpf = cpfLimpo;
+        userData[userId].agendamentos = agendamentos;
 
-        await axios.delete(`http://localhost:3000/api/agendamentos/${data.cpf}/${id}`);
-        await sendMessage(userId, '✅ Seu agendamento mais recente foi cancelado com sucesso!');
+        // criar lista para usuário escolher
+        let texto = '📅 Agendamentos encontrados:\n\n';
+        agendamentos.forEach((a, i) => {
+          const dataFormatada = new Date(a.data._seconds * 1000).toLocaleDateString('pt-BR');
+          texto += `${i + 1}. ${a.tipoServico} - ${dataFormatada} (${a.nome_pet})\n`;
+        });
+        texto += '\nDigite o número do agendamento que deseja cancelar.';
+
+        await sendMessage(userId, texto);
+        setUserState(userId, 'aguardando_confirmar_cancelamento');
+      } catch (err) {
+        console.error('Erro ao buscar agendamentos:', err.message);
+        await sendMessage(userId, '❌ Erro ao buscar agendamentos.');
+      }
+      break;
+
+    case 'aguardando_confirmar_cancelamento':
+      const index = parseInt(text.trim()) - 1;
+      const lista = userData[userId].agendamentos;
+      const cpf = userData[userId].cpf;
+
+      if (isNaN(index) || index < 0 || index >= lista.length) {
+        await sendMessage(userId, '❌ Escolha inválida. Tente novamente.');
+        return;
+      }
+
+      const agendamentoSelecionado = lista[index];
+      try {
+        await axios.delete(
+          `http://localhost:3000/api/agendamentos/${cpf}/${agendamentoSelecionado.id}`
+        );
+        await sendMessage(userId, '✅ Agendamento cancelado com sucesso!');
         limparDados(userId);
-      } catch (error) {
-        console.error('❌ Erro ao cancelar agendamento:', error.message);
-        await sendMessage(userId, '❌ Não foi possível cancelar o agendamento. Tente novamente.');
+      } catch (err) {
+        console.error('Erro ao cancelar:', err.message);
+        await sendMessage(userId, '❌ Falha ao cancelar. Tente novamente.');
       }
       break;
   }
@@ -177,6 +215,11 @@ async function handleButton(userId, buttonId) {
       break;
 
     case 'mais_nao':
+      
+      // Converter a data string para Timestamp
+      const [dia, mes, ano] = data.data.split('/');
+      const dataAgendada = new Date(`${ano}-${mes}-${dia}`);
+      data.data = admin.firestore.Timestamp.fromDate(dataAgendada);
       await registrarAgendamento(data.cpf, data);
       await sendMessage(userId, '✅ Agendado com sucesso. Obrigado por usar o PetShop!');
       limparDados(userId);

@@ -82,4 +82,29 @@ router.delete('/agendamentos/:cpf/:id', async (req, res) => {
   }
 });
 
+router.get('/agendamentos/futuros/:cpf', async (req, res) => {
+  const { cpf } = req.params;
+  try {
+    const hoje = new Date();
+    const snapshot = await db
+      .collection('agendamentos')
+      .doc(cpf)
+      .collection('agendado')
+      .orderBy('data') // Certifique-se de que 'data' é um Timestamp
+      .get();
+
+    const agendamentos = snapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((ag) => ag.data && ag.data.toDate && ag.data.toDate() >= hoje);
+
+    return res.status(200).json({ agendamentos });
+  } catch (error) {
+    console.error('❌ Erro ao buscar agendamentos futuros:', error.message);
+    return res.status(500).json({ error: 'Erro ao buscar agendamentos futuros' });
+  }
+});
+
 module.exports = router;
