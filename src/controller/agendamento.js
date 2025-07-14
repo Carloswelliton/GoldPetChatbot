@@ -63,22 +63,26 @@ router.get('/agendamentos/existe/:cpf', async (req, res) => {
 });
 
 
-router.delete('/agendamentos/:cpf/:id', async (req, res) => {
-  const {cpf, id} = req.params;
+router.get('/agendamentos/:cpf', async (req, res) => {
+  const { cpf } = req.params;
 
   try {
-    const agendamentoRef = db.collection('agendamentos').doc(cpf).collection('agendado').doc(id);
-    const doc = await agendamentoRef.get();
+    const agendamentoRef = db.collection('agendamentos').doc(cpf).collection('agendado');
+    const snapshot = await agendamentoRef.orderBy('timestamp', 'desc').get();
 
-    if (!doc.exists) {
-      return res.status(404).json({ mensagem: 'Agendamento não encontrado' });
+    if (snapshot.empty) {
+      return res.status(404).json({ mensagem: 'Nenhum agendamento encontrado' });
     }
 
-    await agendamentoRef.delete();
-    return res.json({ mensagem: 'Agendamento deletado com sucesso!' });
+    const agendamentos = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return res.status(200).json({ agendamentos });
   } catch (error) {
-    console.error('❌ Erro ao deletar agendamento:', error.message);
-    return res.status(500).json({ erro: 'Erro interno ao deletar agendamento' });
+    console.error('❌ Erro ao buscar agendamentos:', error.message);
+    return res.status(500).json({ erro: 'Erro interno ao buscar agendamentos' });
   }
 });
 
@@ -90,7 +94,7 @@ router.get('/agendamentos/futuros/:cpf', async (req, res) => {
       .collection('agendamentos')
       .doc(cpf)
       .collection('agendado')
-      .orderBy('data') // Certifique-se de que 'data' é um Timestamp
+      .orderBy('data')
       .get();
 
     const agendamentos = snapshot.docs

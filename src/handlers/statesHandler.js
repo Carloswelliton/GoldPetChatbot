@@ -122,7 +122,7 @@ async function handleText(userId, text) {
       break;
 
     case 'data_agendamento':
-      data.data = text; 
+      data.data = text;
       await botao.finalizaBotao(userId, data.tipoServico);
       setUserState(userId, 'aguardando_confirmacao');
       break;
@@ -145,7 +145,6 @@ async function handleText(userId, text) {
           return;
         }
 
-        // salvar CPF e lista para o próximo passo
         userData[userId].cpf = cpfLimpo;
         userData[userId].agendamentos = agendamentos;
 
@@ -187,6 +186,48 @@ async function handleText(userId, text) {
         await sendMessage(userId, '❌ Falha ao cancelar. Tente novamente.');
       }
       break;
+
+    case 'aguardando_cpf_consulta':
+      const cpfConsulta = text.replace(/\D/g, '');
+
+      if (!validarCpf(cpfConsulta)) {
+        await sendMessage(userId, '❌ CPF inválido. Tente novamente.');
+        return;
+      }
+
+      try {
+        const response = await axios.get(`http://localhost:3000/api/agendamentos/${cpfConsulta}`);
+        const agendamentos = response.data.agendamentos;
+
+        if (agendamentos.length === 0) {
+          await sendMessage(userId, '⚠️ Nenhum agendamento encontrado para este CPF.');
+        } else {
+          const agrupados = {};
+          agendamentos.forEach((a) => {
+            if (!agrupados[a.data]) agrupados[a.data] = [];
+            agrupados[a.data].push(a);
+          });
+
+          let mensagem = '📋 *Seus agendamentos agrupados por data:*\n\n';
+          Object.keys(agrupados).forEach((data) => {
+            mensagem += `📅 *${data}*\n`;
+            agrupados[data].forEach((a) => {
+              mensagem += `  • ${a.tipoServico} - Pet: ${a.nome_pet}\n`;
+            });
+            mensagem += '\n';
+          });
+
+          await sendMessage(userId, mensagem);
+
+          await botao.menuBotao(userId);
+        }
+
+        setUserState(userId, 'menu');
+      } catch (error) {
+        console.error('❌ Erro ao consultar agendamentos:', error.message);
+        await sendMessage(userId, '❌ Erro ao buscar agendamentos. Tente novamente.');
+      }
+      break;
   }
 }
 
@@ -215,8 +256,6 @@ async function handleButton(userId, buttonId) {
       break;
 
     case 'mais_nao':
-      
-      // Converter a data string para Timestamp
       const [dia, mes, ano] = data.data.split('/');
       const dataAgendada = new Date(`${ano}-${mes}-${dia}`);
       data.data = admin.firestore.Timestamp.fromDate(dataAgendada);
@@ -229,6 +268,12 @@ async function handleButton(userId, buttonId) {
       await sendMessage(userId, 'Informe o seu CPF (somente os números)');
       setUserState(userId, 'aguardando_cpf_cancelamento'); 
       break;
+      
+    case 'consultar_agendamento':
+      await sendMessage(userId, 'Informe o seu CPF (somente os números)');
+      setUserState(userId, 'aguardando_cpf_consulta'); 
+      break;
+
 
     
   }
