@@ -203,28 +203,90 @@ async function handleText(userId, text) {
           await sendMessage(userId, '⚠️ Nenhum agendamento encontrado para este CPF.');
         } else {
           const agrupados = {};
+
           agendamentos.forEach((a) => {
-            if (!agrupados[a.data]) agrupados[a.data] = [];
-            agrupados[a.data].push(a);
+            let dataFormatada = null;
+
+            // Prioridade 1: Usa dataString se existir e for válida
+            if (
+              a.dataString &&
+              typeof a.dataString === 'string' &&
+              a.dataString.match(/^\d{2}\/\d{2}\/\d{4}$/)
+            ) {
+              dataFormatada = a.dataString;
+            }
+            // Prioridade 2: Usa o campo data (Timestamp)
+            else if (a.data && a.data.seconds) {
+              const dataObj = new Date(a.data.seconds * 1000);
+              dataFormatada = formatarData(dataObj);
+            }
+            // Prioridade 3: Usa timestamp (Timestamp de registro)
+            else if (a.timestamp && a.timestamp.seconds) {
+              const dataObj = new Date(a.timestamp.seconds * 1000);
+              dataFormatada = formatarData(dataObj);
+            }
+            // Caso não reconheça nenhum formato
+            else {
+              dataFormatada = 'Data sem formato reconhecido';
+              console.warn('Formato de data não reconhecido:', {
+                id: a.id,
+                data: a.data,
+                dataString: a.dataString,
+                timestamp: a.timestamp,
+              });
+            }
+
+            if (!agrupados[dataFormatada]) agrupados[dataFormatada] = [];
+            agrupados[dataFormatada].push(a);
           });
 
+          // Função auxiliar para formatar datas
+          function formatarData(date) {
+            const dia = String(date.getDate()).padStart(2, '0');
+            const mes = String(date.getMonth() + 1).padStart(2, '0');
+            const ano = date.getFullYear();
+            return `${dia}/${mes}/${ano}`;
+          }
+
           let mensagem = '📋 *Seus agendamentos agrupados por data:*\n\n';
-          Object.keys(agrupados).forEach((data) => {
+
+          // Ordena as datas cronologicamente
+          const datasOrdenadas = Object.keys(agrupados).sort((a, b) => {
+            if (a === 'Data sem formato reconhecido') return 1;
+            if (b === 'Data sem formato reconhecido') return -1;
+
+            try {
+              const [diaA, mesA, anoA] = a.split('/');
+              const [diaB, mesB, anoB] = b.split('/');
+              return new Date(`${anoA}-${mesA}-${diaA}`) - new Date(`${anoB}-${mesB}-${diaB}`);
+            } catch {
+              return 0;
+            }
+          });
+
+          // Constroi a mensagem formatada
+          datasOrdenadas.forEach((data) => {
             mensagem += `📅 *${data}*\n`;
             agrupados[data].forEach((a) => {
-              mensagem += `  • ${a.tipoServico} - Pet: ${a.nome_pet}\n`;
+              // Adiciona hora se disponível
+              let horaInfo = '';
+              if (a.data && a.data.seconds) {
+                const dataObj = new Date(a.data.seconds * 1000);
+                horaInfo = ` às ${dataObj.getHours()}h${String(dataObj.getMinutes()).padStart(2, '0')}`;
+              }
+
+              mensagem += `  • ${a.tipoServico}${horaInfo} - Pet: ${a.nome_pet}\n`;
             });
             mensagem += '\n';
           });
 
           await sendMessage(userId, mensagem);
-
           await botao.menuBotao(userId);
         }
 
         setUserState(userId, 'menu');
       } catch (error) {
-        console.error('❌ Erro ao consultar agendamentos:', error.message);
+        console.error('❌ Erro ao consultar agendamentos:', error);
         await sendMessage(userId, '❌ Erro ao buscar agendamentos. Tente novamente.');
       }
       break;
@@ -232,6 +294,7 @@ async function handleText(userId, text) {
 }
 
 async function handleButton(userId, buttonId) {
+  if (!userData[userId]) userData[userId] = {};
   const data = getUserData(userId);
 
   switch (buttonId) {
@@ -256,26 +319,41 @@ async function handleButton(userId, buttonId) {
       break;
 
     case 'mais_nao':
-      const [dia, mes, ano] = data.data.split('/');
-      const dataAgendada = new Date(`${ano}-${mes}-${dia}`);
-      data.data = admin.firestore.Timestamp.fromDate(dataAgendada);
-      await registrarAgendamento(data.cpf, data);
-      await sendMessage(userId, '✅ Agendado com sucesso. Obrigado por usar o PetShop!');
-      limparDados(userId);
+      try {
+        // Guarda a string original da data antes de converter para Timestamp
+        const dataString = data.data;
+
+        // Converte para objeto Date
+        const [dia, mes, ano] = dataString.split('/');
+        const dataAgendada = new Date(`${ano}-${mes}-${dia}`);
+
+        if (isNaN(dataAgendada)) {
+          await sendMessage(userId, '❌ Data inválida. Use o formato DD/MM/AAAA.');
+          return;
+        }
+
+        // Mantém tanto a string original quanto o Timestamp
+        data.dataString = dataString; // Formato DD/MM/AAAA
+        data.data = admin.firestore.Timestamp.fromDate(dataAgendada); // Timestamp
+
+        await registrarAgendamento(data.cpf, data);
+        await sendMessage(userId, '✅ Agendado com sucesso. Obrigado por usar o PetShop!');
+        limparDados(userId);
+      } catch (e) {
+        console.error('Erro ao processar data:', e);
+        await sendMessage(userId, '❌ Erro ao processar a data do agendamento.');
+      }
       break;
 
     case 'cancelar_agendamento':
       await sendMessage(userId, 'Informe o seu CPF (somente os números)');
-      setUserState(userId, 'aguardando_cpf_cancelamento'); 
+      setUserState(userId, 'aguardando_cpf_cancelamento');
       break;
-      
+
     case 'consultar_agendamento':
       await sendMessage(userId, 'Informe o seu CPF (somente os números)');
-      setUserState(userId, 'aguardando_cpf_consulta'); 
+      setUserState(userId, 'aguardando_cpf_consulta');
       break;
-
-
-    
   }
 }
 

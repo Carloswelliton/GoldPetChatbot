@@ -1,9 +1,7 @@
-// controller/agendamento.js
 const express = require('express');
 const router = express.Router();
 const { db } = require('../database/Database');
 
-// Retorna todos os agendamentos de um cliente
 router.get('/agendamentos/:userId', async (req, res) => {
   const userId = req.params.userId;
   try {
@@ -62,7 +60,6 @@ router.get('/agendamentos/existe/:cpf', async (req, res) => {
   }
 });
 
-
 router.get('/agendamentos/:cpf', async (req, res) => {
   const { cpf } = req.params;
 
@@ -74,14 +71,21 @@ router.get('/agendamentos/:cpf', async (req, res) => {
       return res.status(404).json({ mensagem: 'Nenhum agendamento encontrado' });
     }
 
-    const agendamentos = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const agendamentos = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        // Garante que os campos de data estejam presentes
+        data: data.data || null,
+        dataString: data.dataString || null,
+        timestamp: data.timestamp || null,
+      };
+    });
 
     return res.status(200).json({ agendamentos });
   } catch (error) {
-    console.error('❌ Erro ao buscar agendamentos:', error.message);
+    console.error('❌ Erro ao buscar agendamentos:', error);
     return res.status(500).json({ erro: 'Erro interno ao buscar agendamentos' });
   }
 });
@@ -94,15 +98,31 @@ router.get('/agendamentos/futuros/:cpf', async (req, res) => {
       .collection('agendamentos')
       .doc(cpf)
       .collection('agendado')
-      .orderBy('data')
+      .orderBy('timestamp', 'desc') // mantém ordenação
       .get();
 
     const agendamentos = snapshot.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      .filter((ag) => ag.data && ag.data.toDate && ag.data.toDate() >= hoje);
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((ag) => {
+        const data = ag.data;
+
+        if (!data) return false;
+
+        if (typeof data.toDate === 'function') {
+          return data.toDate() >= hoje;
+        }
+
+        if (typeof data === 'string') {
+          const partes = data.split('/');
+          if (partes.length !== 3) return false;
+          const [dia, mes, ano] = partes;
+          const dataObj = new Date(`${ano}-${mes}-${dia}`);
+          return !isNaN(dataObj) && dataObj >= hoje;
+        }
+
+        // Tipo inesperado
+        return false;
+      });
 
     return res.status(200).json({ agendamentos });
   } catch (error) {
