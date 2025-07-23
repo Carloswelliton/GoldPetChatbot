@@ -38,7 +38,11 @@ app.get('/webhook', async (req, res) => {
 
 // Timer de inatividade
 async function startInactivityTimer(userId, sendMessageCallback) {
-  clearTimeout(userTimers[userId]);
+  // Garante que qualquer timer existente seja cancelado
+  if (userTimers[userId]) {
+    clearTimeout(userTimers[userId]);
+  }
+
   userTimers[userId] = setTimeout(() => {
     sendMessageCallback(
       '⏱️ Atendimento encerrado por inatividade. Envie "oi" para começar novamente.'
@@ -64,9 +68,10 @@ app.post('/webhook', async (req, res) => {
 
     if (['cancelar', 'encerrar'].includes(clientText)) {
       await sendMessage(from, '❌ Atendimento cancelado.');
-      limparDados(from);
+      clearTimeout(userTimers[from]);
       delete userTimers[from];
       return res.sendStatus(200);
+  
     }
 
     if (clientText === 'voltar') {
