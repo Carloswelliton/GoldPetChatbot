@@ -175,6 +175,7 @@ async function handleText(userId, text) {
       }
 
       const agendamentoSelecionado = lista[index];
+      
       try {
         await axios.delete(
           `http://localhost:3000/api/agendamentos/${cpf}/${agendamentoSelecionado.id}`

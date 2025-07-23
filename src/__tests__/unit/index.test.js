@@ -1,13 +1,38 @@
 const request = require('supertest');
-const app = require('../../index');
+const express = require('express');
+const router = require('../../index'); 
 const stateHandler = require('../../handlers/statesHandler');
 const botao = require('../../controller/Buttons');
 
-jest.mock('../../handlers/statesHandler');
-jest.mock('../../controller/Buttons');
-jest.mock('../../utils/sendMessage');
+jest.mock('../../handlers/statesHandler', () => ({
+  handleText: jest.fn(),
+  handleButton: jest.fn(),
+  getUserState: jest.fn(),
+  setUserState: jest.fn(),
+  limparDados: jest.fn(),
+  getUserData: jest.fn().mockReturnValue({}),
+}));
+
+jest.mock('../../controller/Buttons', () => ({
+  menuBotao: jest.fn(),
+  agendamentoBotao: jest.fn(),
+  consultaBotao: jest.fn(),
+  finalizaBotao: jest.fn(),
+}));
+
+jest.mock('../../utils/sendMessage', () => ({
+  sendMessage: jest.fn().mockResolvedValue(true),
+}));
 
 describe('API Endpoints', () => {
+  let app;
+
+  beforeAll(() => {
+    app = express();
+    app.use(express.json());
+    app.use('/', router);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });

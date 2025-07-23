@@ -131,4 +131,27 @@ router.get('/agendamentos/futuros/:cpf', async (req, res) => {
   }
 });
 
+router.delete('/agendamentos/:cpf/:id', async (req, res) => {
+  const {cpf, id} = req.params;
+  try{
+    const agendamentoRef = db
+      .collection('agendamentos')
+      .doc(cpf)
+      .collection('agendado')
+      .doc(id);
+
+      const agendamento = await agendamentoRef.get();
+
+      if(!agendamento.exists){
+        return res.status(404).json({message: 'Agendamento não encontrado'});
+      }
+
+      await agendamentoRef.delete();
+      return res.status(200).json({message: 'Agendamento cancelado com sucesso'})
+  }catch(error){
+    console.log('❌ Erro ao deletar agendamento:', error.message);
+    return res.status(500).json({message: 'Erro ao cancelar agendamento'})
+  }
+})
+
 module.exports = router;
